@@ -35,7 +35,7 @@ def with_home(rows):
 
 def menu():
     kb=InlineKeyboardBuilder()
-    for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🇰🇿 Вузы, компании и возможности','ecosystem'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy')]:
+    for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🇰🇿 Вузы, компании и возможности','ecosystem'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy'),('ℹ️ О проекте','aboutproject')]:
         kb.button(text=label,callback_data=key)
     kb.adjust(1)
     return kb.as_markup()
@@ -80,6 +80,28 @@ async def answer(c:CallbackQuery,state:FSMContext):
     await c.message.edit_reply_markup(reply_markup=None)
     await state.update_data(index=index+1,answers=data['answers']+[key])
     await question(c.message,state)
+@router.callback_query(F.data=='aboutproject')
+async def about_project(c:CallbackQuery):
+    await c.answer()
+    await c.message.answer(
+        'ℹ️ <b>О проекте IT Navigator KZ</b>\\n\\n'
+        'Учебный Telegram-бот для знакомства школьников 9–11 классов с IT-направлениями Казахстана.\\n\\n'
+        '🎯 7 ситуационных вопросов и 4 направления интересов.\\n'
+        '🗺 Персональная дорожная карта на 1–3 месяца, 6–12 месяцев и 1–3 года.\\n'
+        '🎓 Вузы, компании, гранты, сообщества и события.\\n'
+        '🎤 Четыре тренажёра собеседования по 5 вопросов с обратной связью.\\n'
+        '📊 Обезличенная статистика для координатора.\\n\\n'
+        '<b>Важно:</b> тест не является психологической диагностикой, '
+        'не гарантирует поступления или трудоустройства. '
+        'Сроки, гранты, программы и стажировки проверяются у организаторов. '
+        'Ответы учащихся по отдельным вопросам не сохраняются.',
+        parse_mode='HTML',reply_markup=with_home([])
+    )
+
+@router.message(Command('project'))
+async def project_command(m:Message):
+    await m.answer('ℹ️ Описание проекта можно открыть в главном меню — кнопка «О проекте».',reply_markup=with_home([]))
+
 @router.callback_query(F.data=='roadmap')
 async def my_roadmap(c:CallbackQuery):
     await c.answer()
