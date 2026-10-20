@@ -96,6 +96,7 @@ async def profession_track(c:CallbackQuery):
 async def eco_menu(c:CallbackQuery):
     await c.answer()
     kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label,callback_data=f'ecocat:{key}')] for label,key in ecosystem.categories()])
+    kb.inline_keyboard.append([InlineKeyboardButton(text='🏠 Главное меню',callback_data='home')])
     await c.message.answer('🇰🇿 <b>IT-возможности Казахстана</b>\nВыбери раздел. Сведения о баллах ЕНТ, грантах и стажировках проверяй на официальных сайтах.',parse_mode='HTML',reply_markup=kb)
 
 @router.callback_query(F.data.startswith('ecocat:'))
@@ -108,7 +109,8 @@ async def eco_category(c:CallbackQuery):
         kb=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text='🏙 Алматы',callback_data='ecopage:unis:Алматы:0')],
             [InlineKeyboardButton(text='🏙 Астана',callback_data='ecopage:unis:Астана:0')],
-            [InlineKeyboardButton(text='🌍 Все города',callback_data='ecopage:unis:Все:0')]])
+            [InlineKeyboardButton(text='🌍 Все города',callback_data='ecopage:unis:Все:0')],
+            [InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Меню',callback_data='home')]])
         await c.message.answer('Выбери город:',reply_markup=kb)
     else:
         await show_ecosystem(c.message,key,'Все',0)
@@ -132,7 +134,7 @@ async def show_ecosystem(message,key,city,page):
     if page>0: nav.append(InlineKeyboardButton(text='◀ Назад',callback_data=f'ecopage:{key}:{city}:{page-1}'))
     if (page+1)*n<len(rows): nav.append(InlineKeyboardButton(text='Далее ▶',callback_data=f'ecopage:{key}:{city}:{page+1}'))
     if nav: buttons.append(nav)
-    buttons.append([InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')])
+    buttons.append([InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Меню',callback_data='home')])
     await message.answer('\n'.join(out)+f'\n\nСтраница {page+1}/{max(1,(len(rows)+n-1)//n)}. Актуальность условий уточняйте у организаторов.',parse_mode='HTML',reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 @router.callback_query(F.data.startswith('ecopage:'))
