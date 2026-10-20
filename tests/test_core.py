@@ -7,7 +7,7 @@ class CoreTests(unittest.TestCase):
     def test_extended_recommendations(self):
         scores=core.scores_for(['code']*4+['design']*3)
         self.assertIn('UX/UI',core.result_explanation(scores))
-        self.assertIn('12 недель',core.extended_roadmap('code'))
+        self.assertIn('1–3 месяца',core.extended_roadmap('code'))
     def test_bad_answers(self):
         with self.assertRaises(ValueError): core.scores_for(['code']*2)
 if __name__=='__main__': unittest.main()
