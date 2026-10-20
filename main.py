@@ -17,6 +17,7 @@ import core
 import storage
 import professions
 import interview_quizzes
+import ecosystem
 
 load_dotenv(Path(__file__).parent/'.env')
 TOKEN=os.getenv('BOT_TOKEN','').strip()
@@ -28,7 +29,7 @@ class Interview(StatesGroup):
     answering=State()
 def menu():
     kb=InlineKeyboardBuilder()
-    for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🎓 Вузы Казахстана','universities'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy')]:
+    for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🇰🇿 Вузы, компании и возможности','ecosystem'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy')]:
         kb.button(text=label,callback_data=key)
     kb.adjust(1)
     return kb.as_markup()
@@ -90,11 +91,58 @@ async def profession_track(c:CallbackQuery):
     if key not in core.KEYS:
         return
     await c.message.answer(professions.format_track(key),parse_mode='HTML',reply_markup=menu())
+@router.callback_query(F.data=='ecosystem')
 @router.callback_query(F.data=='universities')
-async def universities(c:CallbackQuery):
+async def eco_menu(c:CallbackQuery):
     await c.answer()
-    content='🎓 <b>Университеты Казахстана</b>\n\n'+'\n'.join(f'• <a href="{url}">{escape(name)}</a>' for name,url in core.UNIVERSITIES)
-    await c.message.answer(content+'\n\nПроверяй актуальные образовательные программы, профильные предметы ЕНТ и гранты на официальных сайтах.',parse_mode='HTML',reply_markup=menu())
+    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label,callback_data=f'ecocat:{key}')] for label,key in ecosystem.categories()])
+    await c.message.answer('🇰🇿 <b>IT-возможности Казахстана</b>\nВыбери раздел. Сведения о баллах ЕНТ, грантах и стажировках проверяй на официальных сайтах.',parse_mode='HTML',reply_markup=kb)
+
+@router.callback_query(F.data.startswith('ecocat:'))
+async def eco_category(c:CallbackQuery):
+    await c.answer()
+    key=c.data.split(':',1)[1]
+    if key not in ecosystem.CATALOG:
+        return
+    if key=='unis':
+        kb=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text='🏙 Алматы',callback_data='ecopage:unis:Алматы:0')],
+            [InlineKeyboardButton(text='🏙 Астана',callback_data='ecopage:unis:Астана:0')],
+            [InlineKeyboardButton(text='🌍 Все города',callback_data='ecopage:unis:Все:0')]])
+        await c.message.answer('Выбери город:',reply_markup=kb)
+    else:
+        await show_ecosystem(c.message,key,'Все',0)
+
+async def show_ecosystem(message,key,city,page):
+    rows=ecosystem.rows(key,city)
+    n=3
+    page=max(0,min(page,max(0,(len(rows)-1)//n)))
+    items=rows[page*n:(page+1)*n]
+    labels=dict((key,label) for label,key in ecosystem.categories())
+    out=[f'<b>{escape(labels[key])}</b>']
+    for row in items:
+        if key in ('unis','companies'):
+            name,extra,url,note=row
+            out.append(f'\n<b>{escape(name)}</b> — {escape(extra)}\n{escape(note)}\n<a href="{url}">Официальный сайт</a>')
+        else:
+            name,url,note=row
+            out.append(f'\n<b>{escape(name)}</b>\n{escape(note)}\n<a href="{url}">Открыть источник</a>')
+    buttons=[]
+    nav=[]
+    if page>0: nav.append(InlineKeyboardButton(text='◀ Назад',callback_data=f'ecopage:{key}:{city}:{page-1}'))
+    if (page+1)*n<len(rows): nav.append(InlineKeyboardButton(text='Далее ▶',callback_data=f'ecopage:{key}:{city}:{page+1}'))
+    if nav: buttons.append(nav)
+    buttons.append([InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')])
+    await message.answer('\n'.join(out)+f'\n\nСтраница {page+1}/{max(1,(len(rows)+n-1)//n)}. Актуальность условий уточняйте у организаторов.',parse_mode='HTML',reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+@router.callback_query(F.data.startswith('ecopage:'))
+async def eco_page(c:CallbackQuery):
+    await c.answer()
+    try: _,key,city,page=c.data.split(':')
+    except ValueError: return
+    if key not in ecosystem.CATALOG or not page.isdecimal(): return
+    await show_ecosystem(c.message,key,city,int(page))
+
 @router.callback_query(F.data=='interview')
 async def interview(c:CallbackQuery,state:FSMContext):
     await c.answer()
