@@ -13,6 +13,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import core
 import storage
+import professions
 from health import start_health_server
 
 load_dotenv(Path(__file__).parent/'.env')
@@ -25,7 +26,7 @@ class Interview(StatesGroup):
     answering=State()
 def menu():
     kb=InlineKeyboardBuilder()
-    for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🎓 Вузы Казахстана','universities'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy')]:
+    for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🎓 Вузы Казахстана','universities'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy')]:
         kb.button(text=label,callback_data=key)
     kb.adjust(1)
     return kb.as_markup()
@@ -75,6 +76,18 @@ async def my_roadmap(c:CallbackQuery):
     await c.answer()
     saved=storage.latest_result(c.from_user.id)
     await c.message.answer(core.roadmap(saved[0]) if saved else 'Сначала пройди профориентационный тест.',parse_mode='HTML',reply_markup=menu())
+@router.callback_query(F.data=='professions')
+async def profession_categories(c:CallbackQuery):
+    await c.answer()
+    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'prof:{k}')] for k in core.KEYS])
+    await c.message.answer('🧭 Выбери интересующую сферу:',reply_markup=kb)
+@router.callback_query(F.data.startswith('prof:'))
+async def profession_track(c:CallbackQuery):
+    await c.answer()
+    key=c.data.split(':',1)[1]
+    if key not in core.KEYS:
+        return
+    await c.message.answer(professions.format_track(key),parse_mode='HTML',reply_markup=menu())
 @router.callback_query(F.data=='universities')
 async def universities(c:CallbackQuery):
     await c.answer()
@@ -134,6 +147,10 @@ async def home(c:CallbackQuery,state:FSMContext):
     await c.answer()
     await state.clear()
     await send_menu(c.message)
+@router.message(Command('myid'))
+async def myid(m:Message):
+    await m.answer(f'Твой Telegram ID: <code>{m.from_user.id}</code>\\nПередавать его можно только координатору проекта для настройки доступа к обезличенной статистике.',parse_mode='HTML')
+
 @router.message(Command('stats'))
 async def stats(m:Message):
     if m.from_user.id not in ADMIN_IDS:
