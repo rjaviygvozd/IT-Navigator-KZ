@@ -45,7 +45,7 @@ async def question(message,state):
         track=core.winning_track(scores)
         storage.save_result(data['user_id'],track,scores)
         await state.clear()
-        await message.answer('✅ <b>Результат теста</b>\n'+core.roadmap(track)+'\n\nБаллы: '+', '.join(f'{core.TRACKS[k]} — {scores[k]}' for k in core.KEYS),parse_mode='HTML',reply_markup=menu())
+        await message.answer('✅ <b>Результат теста</b>\n'+core.result_explanation(scores)+'\n\n'+core.extended_roadmap(track)+'\n\nБаллы: +', '.join(f'{core.TRACKS[k]} — {scores[k]}' for k in core.KEYS),parse_mode='HTML',reply_markup=menu())
         return
     title,options=core.QUESTIONS[index]
     kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=opt,callback_data=f'a:{index}:{key}')] for key,opt in zip(core.KEYS,options)])
@@ -75,7 +75,7 @@ async def answer(c:CallbackQuery,state:FSMContext):
 async def my_roadmap(c:CallbackQuery):
     await c.answer()
     saved=storage.latest_result(c.from_user.id)
-    await c.message.answer(core.roadmap(saved[0]) if saved else 'Сначала пройди профориентационный тест.',parse_mode='HTML',reply_markup=menu())
+    await c.message.answer(core.extended_roadmap(saved[0]) if saved else 'Сначала пройди профориентационный тест.',parse_mode='HTML',reply_markup=menu())
 @router.callback_query(F.data=='professions')
 async def profession_categories(c:CallbackQuery):
     await c.answer()
@@ -149,7 +149,7 @@ async def home(c:CallbackQuery,state:FSMContext):
     await send_menu(c.message)
 @router.message(Command('myid'))
 async def myid(m:Message):
-    await m.answer(f'Твой Telegram ID: <code>{m.from_user.id}</code>\\nПередавать его можно только координатору проекта для настройки доступа к обезличенной статистике.',parse_mode='HTML')
+    await m.answer(f'Твой Telegram ID: <code>{m.from_user.id}</code>\nПередавать его можно только координатору проекта для настройки доступа к обезличенной статистике.',parse_mode='HTML')
 
 @router.message(Command('stats'))
 async def stats(m:Message):
