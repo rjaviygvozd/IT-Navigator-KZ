@@ -1,10 +1,12 @@
 """Telegram interface for IT Navigator KZ (aiogram 3)."""
-import asyncio
+import hashlib
 import logging
 import os
 from html import escape
 from pathlib import Path
 from dotenv import load_dotenv
+from aiohttp import web
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -14,7 +16,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import core
 import storage
 import professions
-from health import start_health_server
 
 load_dotenv(Path(__file__).parent/'.env')
 TOKEN=os.getenv('BOT_TOKEN','').strip()
@@ -163,16 +164,33 @@ async def stats(m:Message):
 @router.message()
 async def other(m:Message):
     await m.answer('Для начала работы нажми /start. Для прерывания тренировки тоже используй /start.')
-async def main():
+WEBHOOK_PATH = '/telegram/webhook'
+WEBHOOK_URL = os.getenv('WEBHOOK_BASE_URL','https://it-navigator-kz-school6.onrender.com').rstrip('/') + WEBHOOK_PATH
+
+async def configure_webhook(bot: Bot):
+    secret=hashlib.sha256(TOKEN.encode('utf-8')).hexdigest()
+    await bot.set_webhook(WEBHOOK_URL, secret_token=secret, allowed_updates=['message','callback_query'], drop_pending_updates=False)
+    logging.info('Webhook configured at %s', WEBHOOK_URL)
+
+async def healthcheck(request):
+    return web.Response(text='IT Navigator KZ online',content_type='text/plain')
+
+def main():
     if not TOKEN or ':' not in TOKEN:
-        raise SystemExit('Укажи BOT_TOKEN в файле .env (см. README.md)')
+        raise SystemExit('Укажи BOT_TOKEN в переменных окружения.')
     logging.basicConfig(level=logging.INFO)
     with storage.database(): pass
-    start_health_server()
     bot=Bot(token=TOKEN)
     dp=Dispatcher()
     dp.include_router(router)
-    try: await dp.start_polling(bot)
-    finally: await bot.session.close()
+    dp.startup.register(configure_webhook)
+    app=web.Application()
+    secret=hashlib.sha256(TOKEN.encode('utf-8')).hexdigest()
+    SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=secret).register(app, path=WEBHOOK_PATH)
+    app.router.add_get('/',healthcheck)
+    app.router.add_get('/health',healthcheck)
+    setup_application(app,dp,bot=bot)
+    web.run_app(app,host='0.0.0.0',port=int(os.environ.get('PORT','10000')))
+
 if __name__=='__main__':
-    asyncio.run(main())
+    main()
