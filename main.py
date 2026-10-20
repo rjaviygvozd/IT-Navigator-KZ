@@ -13,6 +13,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import core
 import storage
+from health import start_health_server
 
 load_dotenv(Path(__file__).parent/'.env')
 TOKEN=os.getenv('BOT_TOKEN','').strip()
@@ -150,6 +151,7 @@ async def main():
         raise SystemExit('Укажи BOT_TOKEN в файле .env (см. README.md)')
     logging.basicConfig(level=logging.INFO)
     with storage.database(): pass
+    start_health_server()
     bot=Bot(token=TOKEN)
     dp=Dispatcher()
     dp.include_router(router)
