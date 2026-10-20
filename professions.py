@@ -22,7 +22,8 @@ PROFILES = {
  ]
 }
 def format_track(track):
-    lines=[f'🧭 <b>Профессии: {{"code":"Разработка", "data":"Данные и ИИ", "people":"Управление IT", "design":"Дизайн"}}[track]</b>']
+    labels={'code':'Разработка','data':'Данные и ИИ','people':'Управление IT','design':'Дизайн'}
+    lines=[f'🧭 <b>Профессии: {labels[track]}</b>']
     for name,desc,skills,practice in PROFILES[track]:
         lines.append(f'\n<b>{name}</b>\n{desc}\nНавыки: {skills}.\nПопробуй: {practice}')
     return '\n'.join(lines)
