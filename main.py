@@ -27,6 +27,12 @@ class Quiz(StatesGroup):
     answering=State()
 class Interview(StatesGroup):
     answering=State()
+def home_button():
+    return InlineKeyboardButton(text='🏠 Главное меню',callback_data='home')
+
+def with_home(rows):
+    return InlineKeyboardMarkup(inline_keyboard=[*rows,[home_button()]])
+
 def menu():
     kb=InlineKeyboardBuilder()
     for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🇰🇿 Вузы, компании и возможности','ecosystem'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy')]:
@@ -51,7 +57,7 @@ async def question(message,state):
         await message.answer('✅ <b>Результат теста</b>\n'+core.result_explanation(scores)+'\n\n'+core.extended_roadmap(track)+'\n\nБаллы: '+', '.join(f'{core.TRACKS[k]} — {scores[k]}' for k in core.KEYS),parse_mode='HTML',reply_markup=menu())
         return
     title,options=core.QUESTIONS[index]
-    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=opt,callback_data=f'a:{index}:{key}')] for key,opt in zip(core.KEYS,options)])
+    kb=with_home([[InlineKeyboardButton(text=opt,callback_data=f'a:{index}:{key}')] for key,opt in zip(core.KEYS,options)])
     await message.answer(f'<b>Вопрос {index+1}/{len(core.QUESTIONS)}</b>\n\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
 @router.callback_query(F.data=='startquiz')
 async def startquiz(c:CallbackQuery,state:FSMContext):
@@ -82,7 +88,7 @@ async def my_roadmap(c:CallbackQuery):
 @router.callback_query(F.data=='professions')
 async def profession_categories(c:CallbackQuery):
     await c.answer()
-    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'prof:{k}')] for k in core.KEYS])
+    kb=with_home([[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'prof:{k}')] for k in core.KEYS])
     await c.message.answer('🧭 Выбери интересующую сферу:',reply_markup=kb)
 @router.callback_query(F.data.startswith('prof:'))
 async def profession_track(c:CallbackQuery):
@@ -149,7 +155,7 @@ async def eco_page(c:CallbackQuery):
 async def interview(c:CallbackQuery,state:FSMContext):
     await c.answer()
     await state.clear()
-    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'intstart:{k}')] for k in core.KEYS])
+    kb=with_home([[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'intstart:{k}')] for k in core.KEYS])
     await c.message.answer('🎤 Выбери направление собеседования:',reply_markup=kb)
 
 @router.callback_query(F.data.startswith('intstart:'))
@@ -164,7 +170,7 @@ async def interview_start(c:CallbackQuery,state:FSMContext):
 
 async def ask_interview(message,key,index):
     title,options,correct=interview_quizzes.QUIZZES[key][index]
-    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f'{chr(1040+i)}) {option}',callback_data=f'intanswer:{index}:{i}')] for i,option in enumerate(options)])
+    kb=with_home([[InlineKeyboardButton(text=f'{chr(1040+i)}) {option}',callback_data=f'intanswer:{index}:{i}')] for i,option in enumerate(options)])
     await message.answer(f'🎤 <b>Вопрос {index+1}/5</b>\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
 
 @router.callback_query(Interview.answering,F.data.startswith('intanswer:'))
@@ -193,7 +199,7 @@ async def interview_answer(c:CallbackQuery,state:FSMContext):
 @router.callback_query(F.data=='feedback')
 async def feedback(c:CallbackQuery):
     await c.answer()
-    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f'{i} ⭐',callback_data=f'rate:{i}') for i in range(1,6)]])
+    kb=with_home([[InlineKeyboardButton(text=f'{i} ⭐',callback_data=f'rate:{i}') for i in range(1,6)]])
     await c.message.answer('Оцени полезность бота от 1 до 5:',reply_markup=kb)
 @router.callback_query(F.data.startswith('rate:'))
 async def rate(c:CallbackQuery):
@@ -202,7 +208,7 @@ async def rate(c:CallbackQuery):
     if not 1<=stars<=5: return await c.answer('Ошибка',show_alert=True)
     storage.save_feedback(c.from_user.id,stars)
     await c.answer('Спасибо!')
-    await c.message.edit_text('Спасибо за оценку!')
+    await c.message.edit_text('Спасибо за оценку!',reply_markup=with_home([]))
 @router.callback_query(F.data=='privacy')
 async def privacy(c:CallbackQuery):
     await c.answer()
@@ -217,7 +223,7 @@ async def eraseyes(c:CallbackQuery,state:FSMContext):
     storage.erase(c.from_user.id)
     await state.clear()
     await c.answer('Удалено')
-    await c.message.edit_text('Твои данные удалены из базы бота.')
+    await c.message.edit_text('Твои данные удалены из базы бота.',reply_markup=with_home([]))
 @router.callback_query(F.data=='home')
 async def home(c:CallbackQuery,state:FSMContext):
     await c.answer()
@@ -235,10 +241,10 @@ async def stats(m:Message):
     lines=['📊 <b>Обезличенная статистика</b>',f'Участников: {total}']
     lines.extend(f'{core.TRACKS[k]}: {counts.get(k,0)}' for k in core.KEYS)
     lines.append(f'Оценок: {n}; средний балл: {avg:.1f}' if avg is not None else 'Оценок пока нет')
-    await m.answer('\n'.join(lines),parse_mode='HTML')
+    await m.answer('\n'.join(lines),parse_mode='HTML',reply_markup=with_home([]))
 @router.message()
 async def other(m:Message):
-    await m.answer('Для начала работы нажми /start. Для прерывания тренировки тоже используй /start.')
+    await m.answer('Выбери раздел или вернись в главное меню.',reply_markup=with_home([]))
 WEBHOOK_PATH = '/telegram/webhook'
 WEBHOOK_URL = os.getenv('WEBHOOK_BASE_URL','https://it-navigator-kz-school6.onrender.com').rstrip('/') + WEBHOOK_PATH
 
