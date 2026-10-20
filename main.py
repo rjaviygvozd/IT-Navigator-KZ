@@ -32,7 +32,7 @@ def menu():
     kb.adjust(1)
     return kb.as_markup()
 async def send_menu(message):
-    await message.answer('🇰🇿 <b>IT Navigator KZ</b>\nПрофориентационный школьный проект. Тест из 15 вопросов поможет исследовать интересы в IT. Результат не определяет профессию окончательно.',parse_mode='HTML',reply_markup=menu())
+    await message.answer('🇰🇿 <b>IT Navigator KZ</b>\nПрофориентационный школьный проект. Тест из 7 ситуационных вопросов поможет исследовать интересы в IT. Результат не определяет профессию окончательно.',parse_mode='HTML',reply_markup=menu())
 @router.message(CommandStart())
 @router.message(Command('help','menu'))
 async def start(message:Message,state:FSMContext):
@@ -50,7 +50,7 @@ async def question(message,state):
         return
     title,options=core.QUESTIONS[index]
     kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=opt,callback_data=f'a:{index}:{key}')] for key,opt in zip(core.KEYS,options)])
-    await message.answer(f'<b>Вопрос {index+1}/15</b>\n\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    await message.answer(f'<b>Вопрос {index+1}/{len(core.QUESTIONS)}</b>\n\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
 @router.callback_query(F.data=='startquiz')
 async def startquiz(c:CallbackQuery,state:FSMContext):
     await c.answer()
