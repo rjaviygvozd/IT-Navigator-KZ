@@ -1,45 +1,66 @@
+"""Persistence layer: PostgreSQL when DATABASE_URL is set, SQLite locally."""
 import json
-import sqlite3
-from pathlib import Path
 import os
+import sqlite3
 from contextlib import contextmanager
-DB=Path(os.environ.get('BOT_DB_PATH',str(Path(__file__).resolve().parent/'data'/'navigator.sqlite3'))).expanduser()
+from pathlib import Path
+
+DB = Path(os.environ.get('BOT_DB_PATH', str(Path(__file__).resolve().parent / 'data' / 'navigator.sqlite3'))).expanduser()
+
+def use_postgres():
+    return bool(os.environ.get('DATABASE_URL', '').strip())
 
 def connect():
+    if use_postgres():
+        import psycopg
+        return psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=10)
     DB.parent.mkdir(parents=True, exist_ok=True)
-    con=sqlite3.connect(DB,timeout=10)
+    con = sqlite3.connect(DB, timeout=10)
     con.execute('PRAGMA journal_mode=WAL')
-    con.execute('CREATE TABLE IF NOT EXISTS results (user_id INTEGER PRIMARY KEY, track TEXT NOT NULL, scores TEXT NOT NULL)')
-    con.execute('CREATE TABLE IF NOT EXISTS feedback (user_id INTEGER PRIMARY KEY, stars INTEGER NOT NULL)')
     return con
 
 @contextmanager
 def database():
     con=connect()
     try:
-        with con: yield con
-    finally: con.close()
+        with con:
+            if use_postgres():
+                con.execute('CREATE TABLE IF NOT EXISTS results (user_id BIGINT PRIMARY KEY, track TEXT NOT NULL, scores TEXT NOT NULL)')
+                con.execute('CREATE TABLE IF NOT EXISTS feedback (user_id BIGINT PRIMARY KEY, stars INTEGER NOT NULL CHECK (stars BETWEEN 1 AND 5))')
+            else:
+                con.execute('CREATE TABLE IF NOT EXISTS results (user_id INTEGER PRIMARY KEY, track TEXT NOT NULL, scores TEXT NOT NULL)')
+                con.execute('CREATE TABLE IF NOT EXISTS feedback (user_id INTEGER PRIMARY KEY, stars INTEGER NOT NULL)')
+            yield con
+    finally:
+        con.close()
+
+def query(sql_sqlite, sql_pg, values=(), fetch='none'):
+    with database() as con:
+        cur=con.execute(sql_pg if use_postgres() else sql_sqlite, values)
+        if fetch=='one': return cur.fetchone()
+        if fetch=='all': return cur.fetchall()
 
 def save_result(user_id,track,scores):
-    with database() as db:
-        db.execute('INSERT INTO results VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET track=excluded.track,scores=excluded.scores',(user_id,track,json.dumps(scores,ensure_ascii=False)))
+    encoded=json.dumps(scores, ensure_ascii=False)
+    sql='INSERT INTO results (user_id,track,scores) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET track=excluded.track,scores=excluded.scores'
+    query(sql, sql.replace('?', '%s'), (user_id,track,encoded))
 
 def latest_result(user_id):
-    with database() as db:
-        return db.execute('SELECT track,scores FROM results WHERE user_id=?',(user_id,)).fetchone()
+    return query('SELECT track,scores FROM results WHERE user_id=?',
+                 'SELECT track,scores FROM results WHERE user_id=%s',(user_id,),fetch='one')
 
 def save_feedback(user_id,stars):
-    with database() as db:
-        db.execute('INSERT INTO feedback VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET stars=excluded.stars',(user_id,stars))
+    sql='INSERT INTO feedback (user_id,stars) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET stars=excluded.stars'
+    query(sql,sql.replace('?','%s'),(user_id,stars))
 
 def erase(user_id):
-    with database() as db:
-        db.execute('DELETE FROM results WHERE user_id=?',(user_id,))
-        db.execute('DELETE FROM feedback WHERE user_id=?',(user_id,))
+    query('DELETE FROM results WHERE user_id=?','DELETE FROM results WHERE user_id=%s',(user_id,))
+    query('DELETE FROM feedback WHERE user_id=?','DELETE FROM feedback WHERE user_id=%s',(user_id,))
 
 def summary():
-    with database() as db:
-        counts=dict(db.execute('SELECT track,COUNT(*) FROM results GROUP BY track').fetchall())
-        n,stars=db.execute('SELECT COUNT(*),AVG(stars) FROM feedback').fetchone()
-        total=db.execute('SELECT COUNT(*) FROM results').fetchone()[0]
-        return total,counts,n,stars
+    counts=dict(query('SELECT track,COUNT(*) FROM results GROUP BY track',
+                     'SELECT track,COUNT(*) FROM results GROUP BY track',fetch='all'))
+    n, stars=query('SELECT COUNT(*),AVG(stars) FROM feedback',
+                   'SELECT COUNT(*),AVG(stars) FROM feedback',fetch='one')
+    total=query('SELECT COUNT(*) FROM results','SELECT COUNT(*) FROM results',fetch='one')[0]
+    return total,counts,n,stars
