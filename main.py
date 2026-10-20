@@ -162,9 +162,9 @@ async def company_technologies(c:CallbackQuery):
 async def send_company_matches(message,rows):
     lines=['🏢 <b>Компании для изучения</b>']
     for name,field,url,note in rows:
-        lines.append(f'\\n<b>{escape(name)}</b> — {escape(field)}\\n{escape(note)}\\n<a href="{url}">Сайт компании</a>')
-    lines.append('\\nПроверяй вакансии и ограничения по возрасту на сайтах компаний.')
-    await message.answer('\\n'.join(lines),parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='🎓 Стажировки',callback_data='companycareers'),InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')]]))
+        lines.append(f'\n<b>{escape(name)}</b> — {escape(field)}\n{escape(note)}\n<a href="{url}">Сайт компании</a>')
+    lines.append('\nПроверяй вакансии и ограничения по возрасту на сайтах компаний.')
+    await message.answer('\n'.join(lines),parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='🎓 Стажировки',callback_data='companycareers'),InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')]]))
 
 @router.callback_query(F.data.startswith('companytrack:'))
 async def company_track(c:CallbackQuery):
@@ -186,9 +186,9 @@ async def company_careers(c:CallbackQuery):
     await c.answer()
     lines=['🎓 <b>Карьера и стажировки</b>']
     for name,url,note in ecosystem.CAREER_RESOURCES:
-        lines.append(f'\\n<b>{escape(name)}</b>\\n{escape(note)}\\n<a href="{url}">Официальная страница</a>')
-    lines.append('\\nБольшинство программ ориентировано на подготовленных кандидатов; доступность для школьников проверяй отдельно.')
-    await c.message.answer('\\n'.join(lines),parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='🏢 Компании',callback_data='ecocat:companies')]]))
+        lines.append(f'\n<b>{escape(name)}</b>\n{escape(note)}\n<a href="{url}">Официальная страница</a>')
+    lines.append('\nБольшинство программ ориентировано на подготовленных кандидатов; доступность для школьников проверяй отдельно.')
+    await c.message.answer('\n'.join(lines),parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='🏢 Компании',callback_data='ecocat:companies')]]))
 
 @router.callback_query(F.data=='unifilters')
 async def university_filters(c:CallbackQuery):
