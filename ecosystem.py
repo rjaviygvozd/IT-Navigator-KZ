@@ -51,3 +51,28 @@ def suggested_universities(track):
     return [r for r in CATALOG['unis'] if r[0] in names]
 def university(index):
     return CATALOG['unis'][index] if isinstance(index,int) and 0<=index<len(CATALOG['unis']) else None
+
+# Exploratory categories, not claims about currently open jobs.
+COMPANY_PROFILES={
+ 'code':['Kaspi.kz','Kolesa Group','Chocofamily','Halyk Bank','Beeline Казахстан'],
+ 'data':['Kaspi.kz','Kolesa Group','Halyk Bank','Beeline Казахстан'],
+ 'people':['Kaspi.kz','Kolesa Group','Chocofamily','Astana Hub'],
+ 'design':['Kaspi.kz','Kolesa Group','Chocofamily']
+}
+TECHNOLOGIES={
+ 'Python':['Kolesa Group','Astana Hub'],
+ 'Java':['Kaspi.kz','Halyk Bank'],
+ 'Дизайн':['Kolesa Group','Kaspi.kz'],
+ 'Аналитика':['Kolesa Group','Halyk Bank','Kaspi.kz']
+}
+# Technologies are broad search hints; they are not audited stack inventories.
+CAREER_RESOURCES=[
+ ('Kolesa Academy','https://kolesa.group/education/academy','Оплачиваемая очная стажировка в Алматы. Условия отбора и набор уточняйте на сайте.'),
+ ('Kolesa Group — вакансии','https://kolesa.group/career/job','Направления разработки, аналитики, дизайна и продуктов. Открытые позиции могут изменяться.')
+]
+def companies_for_track(track):
+    names=COMPANY_PROFILES.get(track,[])
+    return [r for r in CATALOG['companies'] if r[0] in names]
+def companies_for_technology(technology):
+    names=TECHNOLOGIES.get(technology,[])
+    return [r for r in CATALOG['companies'] if r[0] in names]
