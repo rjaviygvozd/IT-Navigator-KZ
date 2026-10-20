@@ -16,6 +16,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import core
 import storage
 import professions
+import interview_quizzes
 
 load_dotenv(Path(__file__).parent/'.env')
 TOKEN=os.getenv('BOT_TOKEN','').strip()
@@ -98,23 +99,47 @@ async def universities(c:CallbackQuery):
 async def interview(c:CallbackQuery,state:FSMContext):
     await c.answer()
     await state.clear()
+    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'intstart:{k}')] for k in core.KEYS])
+    await c.message.answer('🎤 Выбери направление собеседования:',reply_markup=kb)
+
+@router.callback_query(F.data.startswith('intstart:'))
+async def interview_start(c:CallbackQuery,state:FSMContext):
+    await c.answer()
+    key=c.data.split(':',1)[1]
+    if key not in interview_quizzes.QUIZZES:
+        return
     await state.set_state(Interview.answering)
-    await state.update_data(interview_index=0)
-    await ask_interview(c.message,0)
-async def ask_interview(message,index):
-    question_text=core.INTERVIEW[index][0]
-    await message.answer(f'🎤 <b>Вопрос {index+1}/{len(core.INTERVIEW)}</b>\n{escape(question_text)}\n\nНапиши ответ своими словами. Бот покажет образец для самопроверки.',parse_mode='HTML')
-@router.message(Interview.answering,F.text)
-async def interview_answer(m:Message,state:FSMContext):
+    await state.update_data(interview_track=key,interview_index=0,interview_points=0)
+    await ask_interview(c.message,key,0)
+
+async def ask_interview(message,key,index):
+    title,options,correct=interview_quizzes.QUIZZES[key][index]
+    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f'{chr(1040+i)}) {option}',callback_data=f'intanswer:{index}:{i}')] for i,option in enumerate(options)])
+    await message.answer(f'🎤 <b>Вопрос {index+1}/5</b>\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+
+@router.callback_query(Interview.answering,F.data.startswith('intanswer:'))
+async def interview_answer(c:CallbackQuery,state:FSMContext):
     data=await state.get_data()
-    idx=data['interview_index']
-    await m.answer('📘 <b>Пример ответа:</b> '+escape(core.INTERVIEW[idx][1]),parse_mode='HTML')
-    if idx+1>=len(core.INTERVIEW):
+    try:
+        _,raw_index,raw_choice=c.data.split(':')
+        index,choice=int(raw_index),int(raw_choice)
+    except (ValueError,AttributeError):
+        return await c.answer('Некорректный ответ')
+    if index!=data.get('interview_index') or choice not in (0,1,2):
+        return await c.answer('Это старый вопрос')
+    await c.answer()
+    key=data['interview_track']
+    title,options,correct=interview_quizzes.QUIZZES[key][index]
+    points=data['interview_points']+int(choice==correct)
+    await c.message.edit_reply_markup(reply_markup=None)
+    await c.message.answer(('✅ Верно!' if choice==correct else '❌ Пока неверно.')+'\nПравильный ответ: '+options[correct])
+    if index==4:
         await state.clear()
-        await m.answer('Тренировка завершена! Сравни свои ответы с образцами. Автоматическая оценка пока не реализована.',reply_markup=menu())
+        await c.message.answer(f'🎓 <b>Результат: {points}/5</b>\n'+('Отличная работа!' if points>=4 else 'Повтори темы и попробуй ещё раз.'),parse_mode='HTML',reply_markup=menu())
     else:
-        await state.update_data(interview_index=idx+1)
-        await ask_interview(m,idx+1)
+        await state.update_data(interview_index=index+1,interview_points=points)
+        await ask_interview(c.message,key,index+1)
+
 @router.callback_query(F.data=='feedback')
 async def feedback(c:CallbackQuery):
     await c.answer()
