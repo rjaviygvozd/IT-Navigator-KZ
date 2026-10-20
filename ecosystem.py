@@ -38,3 +38,16 @@ def rows(key,city='Все'):
     if key=='unis' and city!='Все':
         data=[r for r in data if r[1]==city]
     return data
+
+# The filters are exploratory themes, NOT verified university degree offerings.
+PROFILE_HINTS={
+ 'code':['Nazarbayev University','КБТУ','МУИТ (IITU)','Satbayev University','КазНУ имени аль-Фараби'],
+ 'data':['Nazarbayev University','КБТУ','МУИТ (IITU)','Satbayev University','ЕНУ имени Л. Н. Гумилёва'],
+ 'people':['КИМЭП','КБТУ','Nazarbayev University','КазНУ имени аль-Фараби'],
+ 'design':['МУИТ (IITU)','Satbayev University','КазНУ имени аль-Фараби']
+}
+def suggested_universities(track):
+    names=PROFILE_HINTS.get(track,[])
+    return [r for r in CATALOG['unis'] if r[0] in names]
+def university(index):
+    return CATALOG['unis'][index] if isinstance(index,int) and 0<=index<len(CATALOG['unis']) else None
