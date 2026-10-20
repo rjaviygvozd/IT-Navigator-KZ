@@ -116,6 +116,9 @@ async def eco_category(c:CallbackQuery):
             [InlineKeyboardButton(text='🏙 Алматы',callback_data='ecopage:unis:Алматы:0')],
             [InlineKeyboardButton(text='🏙 Астана',callback_data='ecopage:unis:Астана:0')],
             [InlineKeyboardButton(text='🌍 Все города',callback_data='ecopage:unis:Все:0')],
+            [InlineKeyboardButton(text='🧭 По IT-направлению',callback_data='unifilters')],
+            [InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare')],
+            [InlineKeyboardButton(text='⭐ Моё избранное',callback_data='unifavs')],
             [InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Меню',callback_data='home')]])
         await c.message.answer('Выбери город:',reply_markup=kb)
     else:
@@ -142,6 +145,71 @@ async def show_ecosystem(message,key,city,page):
     if nav: buttons.append(nav)
     buttons.append([InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Меню',callback_data='home')])
     await message.answer('\n'.join(out)+f'\n\nСтраница {page+1}/{max(1,(len(rows)+n-1)//n)}. Актуальность условий уточняйте у организаторов.',parse_mode='HTML',reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+@router.callback_query(F.data=='unifilters')
+async def university_filters(c:CallbackQuery):
+    await c.answer()
+    kb=with_home([[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'uniprofile:{k}')] for k in core.KEYS])
+    await c.message.answer('🔎 Выбери интересующую IT-сферу. Это направления для самостоятельного изучения, а не подтверждённый перечень программ университета.',reply_markup=kb)
+
+@router.callback_query(F.data.startswith('uniprofile:'))
+async def university_profile(c:CallbackQuery):
+    await c.answer()
+    track=c.data.split(':',1)[1]
+    if track not in core.KEYS: return
+    rows=ecosystem.suggested_universities(track)
+    msg='🎓 <b>Вузы для дальнейшего изучения</b>\\n\\n'
+    msg+='\\n'.join(f'• <a href="{url}">{escape(name)}</a> ({escape(city)})' for name,city,url,note in rows)
+    msg+='\\n\\nНаличие конкретной программы и поступление уточняй на официальном сайте.'
+    await c.message.answer(msg,parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare'),InlineKeyboardButton(text='⭐ Избранное',callback_data='unifavs')]]))
+
+@router.callback_query(F.data=='unicompare')
+async def university_compare(c:CallbackQuery):
+    await c.answer()
+    rows=ecosystem.CATALOG['unis']
+    kb=with_home([[InlineKeyboardButton(text=r[0],callback_data=f'unifirst:{i}')] for i,r in enumerate(rows)])
+    await c.message.answer('⚖ Выбери первый вуз для сравнения:',reply_markup=kb)
+
+@router.callback_query(F.data.startswith('unifirst:'))
+async def university_first(c:CallbackQuery):
+    await c.answer()
+    try: first=int(c.data.split(':')[1])
+    except ValueError: return
+    if not ecosystem.university(first): return
+    kb=with_home([[InlineKeyboardButton(text=r[0],callback_data=f'unisecond:{first}:{i}')] for i,r in enumerate(ecosystem.CATALOG['unis']) if i!=first])
+    await c.message.answer('Выбери второй вуз:',reply_markup=kb)
+
+@router.callback_query(F.data.startswith('unisecond:'))
+async def university_second(c:CallbackQuery):
+    await c.answer()
+    try: _,a,b=c.data.split(':'); a=int(a);b=int(b)
+    except ValueError: return
+    first,second=ecosystem.university(a),ecosystem.university(b)
+    if not first or not second or a==b: return
+    lines=['⚖ <b>Сравнение университетов</b>']
+    for name,city,url,note in (first,second):
+        lines.append(f'\\n<b>{escape(name)}</b>\\nГород: {escape(city)}\\n{escape(note)}\\n<a href="{url}">Официальный сайт</a>')
+    lines.append('\\nПроходные баллы, гранты и программы здесь не сравниваются без проверенных данных за нужный год.')
+    buttons=[[InlineKeyboardButton(text='⭐ '+first[0],callback_data=f'unifav:{a}'),InlineKeyboardButton(text='⭐ '+second[0],callback_data=f'unifav:{b}')],[InlineKeyboardButton(text='⚖ Другое сравнение',callback_data='unicompare')]]
+    await c.message.answer('\\n'.join(lines),parse_mode='HTML',reply_markup=with_home(buttons))
+
+@router.callback_query(F.data.startswith('unifav:'))
+async def university_favorite(c:CallbackQuery):
+    await c.answer()
+    try: index=int(c.data.split(':')[1])
+    except ValueError: return
+    row=ecosystem.university(index)
+    if not row: return
+    added=storage.favorite_toggle(c.from_user.id,row[0])
+    await c.message.answer(('⭐ Добавлено в избранное: ' if added else 'Убрано из избранного: ')+row[0],reply_markup=with_home([[InlineKeyboardButton(text='⭐ Моё избранное',callback_data='unifavs')]]))
+
+@router.callback_query(F.data=='unifavs')
+async def university_favorites(c:CallbackQuery):
+    await c.answer()
+    names=storage.favorites(c.from_user.id)
+    rows=[row for row in ecosystem.CATALOG['unis'] if row[0] in names]
+    msg='⭐ <b>Избранные вузы</b>\\n'+('\\n'.join(f'• <a href="{url}">{escape(name)}</a>' for name,city,url,note in rows) if rows else 'Пока пусто. Добавь вуз из сравнения.')
+    await c.message.answer(msg,parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare')]]))
 
 @router.callback_query(F.data.startswith('ecopage:'))
 async def eco_page(c:CallbackQuery):
