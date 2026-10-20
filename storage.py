@@ -30,6 +30,7 @@ def database():
             else:
                 con.execute('CREATE TABLE IF NOT EXISTS results (user_id INTEGER PRIMARY KEY, track TEXT NOT NULL, scores TEXT NOT NULL)')
                 con.execute('CREATE TABLE IF NOT EXISTS feedback (user_id INTEGER PRIMARY KEY, stars INTEGER NOT NULL)')
+            con.execute('CREATE TABLE IF NOT EXISTS favorites (user_id BIGINT NOT NULL, university_name TEXT NOT NULL, PRIMARY KEY (user_id,university_name))')
             yield con
     finally:
         con.close()
@@ -53,7 +54,19 @@ def save_feedback(user_id,stars):
     sql='INSERT INTO feedback (user_id,stars) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET stars=excluded.stars'
     query(sql,sql.replace('?','%s'),(user_id,stars))
 
+def favorite_toggle(user_id,name):
+    existing=query('SELECT 1 FROM favorites WHERE user_id=? AND university_name=?','SELECT 1 FROM favorites WHERE user_id=%s AND university_name=%s',(user_id,name),fetch='one')
+    if existing:
+        query('DELETE FROM favorites WHERE user_id=? AND university_name=?','DELETE FROM favorites WHERE user_id=%s AND university_name=%s',(user_id,name))
+        return False
+    query('INSERT INTO favorites (user_id,university_name) VALUES (?,?)','INSERT INTO favorites (user_id,university_name) VALUES (%s,%s)',(user_id,name))
+    return True
+
+def favorites(user_id):
+    return [row[0] for row in query('SELECT university_name FROM favorites WHERE user_id=? ORDER BY university_name','SELECT university_name FROM favorites WHERE user_id=%s ORDER BY university_name',(user_id,),fetch='all')]
+
 def erase(user_id):
+    query('DELETE FROM favorites WHERE user_id=?','DELETE FROM favorites WHERE user_id=%s',(user_id,))
     query('DELETE FROM results WHERE user_id=?','DELETE FROM results WHERE user_id=%s',(user_id,))
     query('DELETE FROM feedback WHERE user_id=?','DELETE FROM feedback WHERE user_id=%s',(user_id,))
 
