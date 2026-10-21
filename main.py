@@ -233,9 +233,9 @@ async def university_profile(c:CallbackQuery):
     track=c.data.split(':',1)[1]
     if track not in core.KEYS: return
     rows=ecosystem.suggested_universities(track)
-    msg='🎓 <b>Вузы для дальнейшего изучения</b>\\n\\n'
-    msg+='\\n'.join(f'• <a href="{url}">{escape(name)}</a> ({escape(city)})' for name,city,url,note in rows)
-    msg+='\\n\\nНаличие конкретной программы и поступление уточняй на официальном сайте.'
+    msg='🎓 <b>Вузы для дальнейшего изучения</b>\n\n'
+    msg+='\n'.join(f'• <a href="{url}">{escape(name)}</a> ({escape(city)})' for name,city,url,note in rows)
+    msg+='\n\nНаличие конкретной программы и поступление уточняй на официальном сайте.'
     await c.message.answer(msg,parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare'),InlineKeyboardButton(text='⭐ Избранное',callback_data='unifavs')]]))
 
 @router.callback_query(F.data=='unicompare')
@@ -263,10 +263,10 @@ async def university_second(c:CallbackQuery):
     if not first or not second or a==b: return
     lines=['⚖ <b>Сравнение университетов</b>']
     for name,city,url,note in (first,second):
-        lines.append(f'\\n<b>{escape(name)}</b>\\nГород: {escape(city)}\\n{escape(note)}\\n<a href="{url}">Официальный сайт</a>')
-    lines.append('\\nПроходные баллы, гранты и программы здесь не сравниваются без проверенных данных за нужный год.')
+        lines.append(f'\n<b>{escape(name)}</b>\nГород: {escape(city)}\n{escape(note)}\n<a href="{url}">Официальный сайт</a>')
+    lines.append('\nПроходные баллы, гранты и программы здесь не сравниваются без проверенных данных за нужный год.')
     buttons=[[InlineKeyboardButton(text='⭐ '+first[0],callback_data=f'unifav:{a}'),InlineKeyboardButton(text='⭐ '+second[0],callback_data=f'unifav:{b}')],[InlineKeyboardButton(text='⚖ Другое сравнение',callback_data='unicompare')]]
-    await c.message.answer('\\n'.join(lines),parse_mode='HTML',reply_markup=with_home(buttons))
+    await c.message.answer('\n'.join(lines),parse_mode='HTML',reply_markup=with_home(buttons))
 
 @router.callback_query(F.data.startswith('unifav:'))
 async def university_favorite(c:CallbackQuery):
@@ -283,7 +283,7 @@ async def university_favorites(c:CallbackQuery):
     await safe_answer(c,)
     names=storage.favorites(c.from_user.id)
     rows=[row for row in ecosystem.CATALOG['unis'] if row[0] in names]
-    msg='⭐ <b>Избранные вузы</b>\\n'+('\\n'.join(f'• <a href="{url}">{escape(name)}</a>' for name,city,url,note in rows) if rows else 'Пока пусто. Добавь вуз из сравнения.')
+    msg='⭐ <b>Избранные вузы</b>\n'+('\n'.join(f'• <a href="{url}">{escape(name)}</a>' for name,city,url,note in rows) if rows else 'Пока пусто. Добавь вуз из сравнения.')
     await c.message.answer(msg,parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare')]]))
 
 @router.callback_query(F.data.startswith('ecopage:'))
@@ -356,7 +356,7 @@ async def rate(c:CallbackQuery):
 async def privacy(c:CallbackQuery):
     await safe_answer(c,)
     kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='🗑 Удалить мои данные',callback_data='eraseask')],[InlineKeyboardButton(text='↩️ Меню',callback_data='home')]])
-    await c.message.answer('🔐 Бот сохраняет только Telegram ID, итог теста и, если поставлена, оценку. Имя, телефон, школа и ответы по отдельным вопросам в базе не сохраняются. Участие добровольное. Данные можно удалить.',reply_markup=kb)
+    await c.message.answer('🔐 Бот сохраняет только Telegram ID, итог теста и, если поставлена, оценку. Также сохраняется список избранных вузов. Имя, телефон, школа и ответы по отдельным вопросам в базе не сохраняются. Участие добровольное. Данные можно удалить.',reply_markup=kb)
 @router.callback_query(F.data=='eraseask')
 async def eraseask(c:CallbackQuery):
     await safe_answer(c,)
@@ -366,7 +366,7 @@ async def eraseyes(c:CallbackQuery,state:FSMContext):
     storage.erase(c.from_user.id)
     await state.clear()
     await safe_answer(c,'Удалено')
-    await c.message.edit_text('Твои данные удалены из базы бота.',reply_markup=with_home([]))
+    await c.message.edit_text('Твои результаты, оценка и избранное удалены из базы бота.',reply_markup=with_home([]))
 @router.callback_query(F.data=='home')
 async def home(c:CallbackQuery,state:FSMContext):
     await safe_answer(c,)
