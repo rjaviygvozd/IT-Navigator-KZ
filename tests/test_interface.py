@@ -114,6 +114,49 @@ class InterfaceTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('5/5',self.last_message().text)
         self.assert_home()
 
+    async def test_full_answers_are_in_message_with_short_buttons(self):
+        from html import escape
+        await self.click('startquiz')
+        for i,(_,options) in enumerate(core.QUESTIONS):
+            msg=self.last_message()
+            for option in options:self.assertIn(escape(option),msg.text)
+            labels=[b.text for row in msg.reply_markup.inline_keyboard for b in row if b.callback_data.startswith('a:')]
+            self.assertEqual(labels,list(main.ANSWER_LABELS))
+            await self.click(f'a:{i}:code',msg)
+        for key,questions in interview_quizzes.QUIZZES.items():
+            await self.click(f'intstart:{key}')
+            for i,(_,options,correct) in enumerate(questions):
+                msg=self.last_message()
+                for option in options:self.assertIn(escape(option),msg.text)
+                labels=[b.text for row in msg.reply_markup.inline_keyboard for b in row if b.callback_data.startswith('intanswer:')]
+                self.assertEqual(labels,list(main.ANSWER_LABELS[:len(options)]))
+                await self.click(f'intanswer:{i}:{correct}',msg)
+        self.assert_home()
+
+    async def test_roadmap_without_test_does_not_save_diagnostic(self):
+        await self.click('roadmap')
+        self.assertIn('без теста',self.last_message().text)
+        for key in core.KEYS:
+            await self.click(f'roadmaptrack:{key}')
+            self.assertIn(core.TRACKS[key],self.last_message().text)
+            self.assertIsNone(storage.latest_result(42))
+        storage.save_result(42,'code',{'code':7})
+        await self.click('roadmaptrack:data')
+        self.assertEqual(storage.latest_result(42)[0],'code')
+        await self.click('roadmapchoose')
+        self.assertIn('без теста',self.last_message().text)
+        self.assert_home()
+
+    async def test_technology_cards_do_not_imply_company_stack(self):
+        for i,label in enumerate(ecosystem.TECHNOLOGIES):
+            await self.click(f'companytech:{i}')
+            msg=self.last_message()
+            self.assertIn(label,msg.text)
+            self.assertIn('Официальный учебный источник',msg.text)
+            self.assertIn('нельзя сделать вывод о стеке компании',msg.text)
+            for row in ecosystem.CATALOG['companies']:self.assertNotIn(row[0],msg.text)
+        self.assert_home()
+
     async def test_restart_unknown_and_malformed_callbacks(self):
         for data in ('a:0:code','intanswer:0:0','unknown','ecopage:bad','unisecond:x:y','unifav:-1','rate:0'):
             await self.click(data)

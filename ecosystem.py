@@ -60,20 +60,18 @@ COMPANY_PROFILES={
  'people':['Kaspi.kz','Kolesa Group','Chocofamily','Astana Hub'],
  'design':['Kaspi.kz','Kolesa Group','Chocofamily']
 }
+# Educational skill cards, not inferred company technology stacks.
+# Official learning pages checked 2026-10-26.
 TECHNOLOGIES={
- 'Python':['Kolesa Group','Astana Hub'],
- 'Java':['Kaspi.kz','Halyk Bank'],
- 'Дизайн':['Kolesa Group','Kaspi.kz'],
- 'Аналитика':['Kolesa Group','Halyk Bank','Kaspi.kz']
+ 'Python':('Язык программирования для автоматизации, анализа данных и приложений.','Напиши программу, которая считает среднюю оценку из списка чисел. Официальный учебник предполагает базовое знакомство с программированием.','https://docs.python.org/3/tutorial/'),
+ 'Java':('Язык программирования для приложений, в том числе серверных. Это отдельный язык, не JavaScript.','Начни с программы Hello World и вывода результата простого вычисления.','https://dev.java/learn/'),
+ 'Дизайн':('UX помогает понять удобство продукта, UI — спроектировать его интерфейс. Figma используется для макетов и прототипов.','Нарисуй экран школьного расписания и попроси одноклассника найти в нём нужный урок.','https://help.figma.com/hc/en-us/categories/360002042553-Figma-Design'),
+ 'Аналитика':('Работа с данными: сформулировать вопрос, проверить таблицу и объяснить вывод. pandas помогает обрабатывать таблицы в Python.','Возьми учебную таблицу без персональных данных и сравни средние значения двух групп.','https://pandas.pydata.org/docs/getting_started/index.html')
 }
-# Technologies are broad search hints; they are not audited stack inventories.
 CAREER_RESOURCES=[
  ('Kolesa Academy','https://kolesa.group/education/academy','Страница программы обучения. Текущий набор, оплату, формат и возрастные условия нужно проверить на сайте.'),
  ('Kolesa Group — вакансии','https://kolesa.group/career/job','Направления разработки, аналитики, дизайна и продуктов. Открытые позиции могут изменяться.')
 ]
 def companies_for_track(track):
     names=COMPANY_PROFILES.get(track,[])
-    return [r for r in CATALOG['companies'] if r[0] in names]
-def companies_for_technology(technology):
-    names=TECHNOLOGIES.get(technology,[])
     return [r for r in CATALOG['companies'] if r[0] in names]
