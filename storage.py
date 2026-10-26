@@ -55,20 +55,36 @@ def save_feedback(user_id,stars):
     query(sql,sql.replace('?','%s'),(user_id,stars))
 
 def favorite_toggle(user_id,name):
-    existing=query('SELECT 1 FROM favorites WHERE user_id=? AND university_name=?','SELECT 1 FROM favorites WHERE user_id=%s AND university_name=%s',(user_id,name),fetch='one')
-    if existing:
-        query('DELETE FROM favorites WHERE user_id=? AND university_name=?','DELETE FROM favorites WHERE user_id=%s AND university_name=%s',(user_id,name))
-        return False
-    query('INSERT INTO favorites (user_id,university_name) VALUES (?,?)','INSERT INTO favorites (user_id,university_name) VALUES (%s,%s)',(user_id,name))
-    return True
+    # One transaction, serializing toggles across PostgreSQL connections.
+    with database() as con:
+        pg=use_postgres()
+        mark='%s' if pg else '?'
+        if pg:
+            con.execute('SELECT pg_advisory_xact_lock(%s)', (user_id,))
+        else:
+            con.execute('BEGIN IMMEDIATE')
+        values=(user_id,name)
+        existing=con.execute(f'SELECT 1 FROM favorites WHERE user_id={mark} AND university_name={mark}',values).fetchone()
+        if existing:
+            con.execute(f'DELETE FROM favorites WHERE user_id={mark} AND university_name={mark}',values)
+            return False
+        con.execute(f'INSERT INTO favorites (user_id,university_name) VALUES ({mark},{mark})',values)
+        return True
 
 def favorites(user_id):
     return [row[0] for row in query('SELECT university_name FROM favorites WHERE user_id=? ORDER BY university_name','SELECT university_name FROM favorites WHERE user_id=%s ORDER BY university_name',(user_id,),fetch='all')]
 
 def erase(user_id):
-    query('DELETE FROM favorites WHERE user_id=?','DELETE FROM favorites WHERE user_id=%s',(user_id,))
-    query('DELETE FROM results WHERE user_id=?','DELETE FROM results WHERE user_id=%s',(user_id,))
-    query('DELETE FROM feedback WHERE user_id=?','DELETE FROM feedback WHERE user_id=%s',(user_id,))
+    # All personal records are removed together or rolled back together.
+    with database() as con:
+        mark='%s' if use_postgres() else '?'
+        for table in ('favorites','results','feedback'):
+            con.execute(f'DELETE FROM {table} WHERE user_id={mark}',(user_id,))
+
+
+def check_connection():
+    with database() as con:
+        return con.execute('SELECT 1').fetchone()[0] == 1
 
 def summary():
     counts=dict(query('SELECT track,COUNT(*) FROM results GROUP BY track',

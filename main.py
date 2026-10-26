@@ -1,4 +1,5 @@
 """Telegram interface for IT Navigator KZ (aiogram 3)."""
+import asyncio
 import hashlib
 import logging
 import os
@@ -11,8 +12,9 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import SimpleEventIsolation
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ErrorEvent
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import core
 import storage
@@ -47,6 +49,7 @@ def menu():
     for label,key in [('🎯 Пройти тест','startquiz'),('🗺 Моя дорожная карта','roadmap'),('🧭 Каталог IT-профессий','professions'),('🇰🇿 Вузы, компании и возможности','ecosystem'),('🎤 Тренажёр собеседования','interview'),('⭐ Оценить бота','feedback'),('🔐 Мои данные','privacy'),('ℹ️ О проекте','aboutproject')]:
         kb.button(text=label,callback_data=key)
     kb.adjust(1)
+    kb.row(home_button())
     return kb.as_markup()
 async def send_menu(message):
     await message.answer('🇰🇿 <b>IT Navigator KZ</b>\nПрофориентационный школьный проект. Тест из 7 ситуационных вопросов поможет исследовать интересы в IT. Результат не определяет профессию окончательно.',parse_mode='HTML',reply_markup=menu())
@@ -61,13 +64,14 @@ async def question(message,state):
     if index>=len(core.QUESTIONS):
         scores=core.scores_for(data['answers'])
         track=core.winning_track(scores)
-        storage.save_result(data['user_id'],track,scores)
+        await asyncio.to_thread(storage.save_result, data['user_id'],track,scores)
         await state.clear()
         await message.answer('✅ <b>Результат теста</b>\n'+core.result_explanation(scores)+'\n\n'+core.extended_roadmap(track)+'\n\nБаллы: '+', '.join(f'{core.TRACKS[k]} — {scores[k]}' for k in core.KEYS),parse_mode='HTML',reply_markup=menu())
         return
     title,options=core.QUESTIONS[index]
     kb=with_home([[InlineKeyboardButton(text=opt,callback_data=f'a:{index}:{key}')] for key,opt in zip(core.KEYS,options)])
-    await message.answer(f'<b>Вопрос {index+1}/{len(core.QUESTIONS)}</b>\n\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    sent=await message.answer(f'<b>Вопрос {index+1}/{len(core.QUESTIONS)}</b>\n\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    await state.update_data(question_message_id=sent.message_id)
 @router.callback_query(F.data=='startquiz')
 async def startquiz(c:CallbackQuery,state:FSMContext):
     await safe_answer(c,)
@@ -83,7 +87,7 @@ async def answer(c:CallbackQuery,state:FSMContext):
         index=int(raw_index)
     except (ValueError,AttributeError):
         return await safe_answer(c,'Некорректный ответ',show_alert=True)
-    if index!=data.get('index') or key not in core.KEYS:
+    if index!=data.get('index') or key not in core.KEYS or c.message.message_id!=data.get('question_message_id'):
         return await safe_answer(c,'Это старый вопрос. Используй последний.',show_alert=True)
     await safe_answer(c,)
     await c.message.edit_reply_markup(reply_markup=None)
@@ -103,7 +107,8 @@ async def about_project(c:CallbackQuery):
         '<b>Важно:</b> тест не является психологической диагностикой, '
         'не гарантирует поступления или трудоустройства. '
         'Сроки, гранты, программы и стажировки проверяются у организаторов. '
-        'Ответы учащихся по отдельным вопросам не сохраняются.',
+        'Ответы по отдельным вопросам временно обрабатываются в памяти до завершения или сброса теста и не записываются в базу. '
+        'Подбор использует подсчёт интересов. AI/LLM не подключён.',
         parse_mode='HTML',reply_markup=with_home([])
     )
 
@@ -114,7 +119,7 @@ async def project_command(m:Message):
 @router.callback_query(F.data=='roadmap')
 async def my_roadmap(c:CallbackQuery):
     await safe_answer(c,)
-    saved=storage.latest_result(c.from_user.id)
+    saved=await asyncio.to_thread(storage.latest_result, c.from_user.id)
     await c.message.answer(core.extended_roadmap(saved[0]) if saved else 'Сначала пройди профориентационный тест.',parse_mode='HTML',reply_markup=menu())
 @router.callback_query(F.data=='professions')
 async def profession_categories(c:CallbackQuery):
@@ -146,11 +151,12 @@ async def eco_category(c:CallbackQuery):
         kb=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text='🏙 Алматы',callback_data='ecopage:unis:Алматы:0')],
             [InlineKeyboardButton(text='🏙 Астана',callback_data='ecopage:unis:Астана:0')],
+            [InlineKeyboardButton(text='🏙 Павлодар',callback_data='ecopage:unis:Павлодар:0')],
             [InlineKeyboardButton(text='🌍 Все города',callback_data='ecopage:unis:Все:0')],
             [InlineKeyboardButton(text='🧭 По IT-направлению',callback_data='unifilters')],
             [InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare')],
             [InlineKeyboardButton(text='⭐ Моё избранное',callback_data='unifavs')],
-            [InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Меню',callback_data='home')]])
+            [InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Главное меню',callback_data='home')]])
         await c.message.answer('Выбери город:',reply_markup=kb)
     elif key=='companies':
         kb=with_home([[InlineKeyboardButton(text='🧭 По IT-направлению',callback_data='companytracks')],[InlineKeyboardButton(text='💻 По технологиям',callback_data='companytechnologies')],[InlineKeyboardButton(text='🎓 Стажировки и карьера',callback_data='companycareers')],[InlineKeyboardButton(text='📋 Все компании',callback_data='ecopage:companies:Все:0')],[InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')]])
@@ -177,7 +183,7 @@ async def show_ecosystem(message,key,city,page):
     if page>0: nav.append(InlineKeyboardButton(text='◀ Назад',callback_data=f'ecopage:{key}:{city}:{page-1}'))
     if (page+1)*n<len(rows): nav.append(InlineKeyboardButton(text='Далее ▶',callback_data=f'ecopage:{key}:{city}:{page+1}'))
     if nav: buttons.append(nav)
-    buttons.append([InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Меню',callback_data='home')])
+    buttons.append([InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Главное меню',callback_data='home')])
     await message.answer('\n'.join(out)+f'\n\nСтраница {page+1}/{max(1,(len(rows)+n-1)//n)}. Актуальность условий уточняйте у организаторов.',parse_mode='HTML',reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 @router.callback_query(F.data=='companytracks')
@@ -275,13 +281,13 @@ async def university_favorite(c:CallbackQuery):
     except ValueError: return
     row=ecosystem.university(index)
     if not row: return
-    added=storage.favorite_toggle(c.from_user.id,row[0])
+    added=await asyncio.to_thread(storage.favorite_toggle, c.from_user.id,row[0])
     await c.message.answer(('⭐ Добавлено в избранное: ' if added else 'Убрано из избранного: ')+row[0],reply_markup=with_home([[InlineKeyboardButton(text='⭐ Моё избранное',callback_data='unifavs')]]))
 
 @router.callback_query(F.data=='unifavs')
 async def university_favorites(c:CallbackQuery):
     await safe_answer(c,)
-    names=storage.favorites(c.from_user.id)
+    names=await asyncio.to_thread(storage.favorites, c.from_user.id)
     rows=[row for row in ecosystem.CATALOG['unis'] if row[0] in names]
     msg='⭐ <b>Избранные вузы</b>\n'+('\n'.join(f'• <a href="{url}">{escape(name)}</a>' for name,city,url,note in rows) if rows else 'Пока пусто. Добавь вуз из сравнения.')
     await c.message.answer(msg,parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='⚖ Сравнить вузы',callback_data='unicompare')]]))
@@ -309,12 +315,13 @@ async def interview_start(c:CallbackQuery,state:FSMContext):
         return
     await state.set_state(Interview.answering)
     await state.update_data(interview_track=key,interview_index=0,interview_points=0)
-    await ask_interview(c.message,key,0)
+    await ask_interview(c.message,state,key,0)
 
-async def ask_interview(message,key,index):
+async def ask_interview(message,state,key,index):
     title,options,correct=interview_quizzes.QUIZZES[key][index]
     kb=with_home([[InlineKeyboardButton(text=f'{chr(1040+i)}) {option}',callback_data=f'intanswer:{index}:{i}')] for i,option in enumerate(options)])
-    await message.answer(f'🎤 <b>Вопрос {index+1}/5</b>\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    sent=await message.answer(f'🎤 <b>Вопрос {index+1}/5</b>\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    await state.update_data(question_message_id=sent.message_id)
 
 @router.callback_query(Interview.answering,F.data.startswith('intanswer:'))
 async def interview_answer(c:CallbackQuery,state:FSMContext):
@@ -324,20 +331,20 @@ async def interview_answer(c:CallbackQuery,state:FSMContext):
         index,choice=int(raw_index),int(raw_choice)
     except (ValueError,AttributeError):
         return await safe_answer(c,'Некорректный ответ')
-    if index!=data.get('interview_index') or choice not in (0,1,2):
+    if index!=data.get('interview_index') or choice not in (0,1,2) or c.message.message_id!=data.get('question_message_id'):
         return await safe_answer(c,'Это старый вопрос')
     await safe_answer(c,)
     key=data['interview_track']
     title,options,correct=interview_quizzes.QUIZZES[key][index]
     points=data['interview_points']+int(choice==correct)
     await c.message.edit_reply_markup(reply_markup=None)
-    await c.message.answer(('✅ Верно!' if choice==correct else '❌ Пока неверно.')+'\nПравильный ответ: '+options[correct])
+    await c.message.answer(('✅ Верно!' if choice==correct else '❌ Пока неверно.')+'\nПравильный ответ: '+options[correct],reply_markup=with_home([]))
     if index==4:
         await state.clear()
         await c.message.answer(f'🎓 <b>Результат: {points}/5</b>\n'+('Отличная работа!' if points>=4 else 'Повтори темы и попробуй ещё раз.'),parse_mode='HTML',reply_markup=menu())
     else:
         await state.update_data(interview_index=index+1,interview_points=points)
-        await ask_interview(c.message,key,index+1)
+        await ask_interview(c.message,state,key,index+1)
 
 @router.callback_query(F.data=='feedback')
 async def feedback(c:CallbackQuery):
@@ -349,21 +356,21 @@ async def rate(c:CallbackQuery):
     try: stars=int(c.data.split(':')[1])
     except (ValueError,IndexError): return await safe_answer(c,'Ошибка',show_alert=True)
     if not 1<=stars<=5: return await safe_answer(c,'Ошибка',show_alert=True)
-    storage.save_feedback(c.from_user.id,stars)
+    await asyncio.to_thread(storage.save_feedback, c.from_user.id,stars)
     await safe_answer(c,'Спасибо!')
     await c.message.edit_text('Спасибо за оценку!',reply_markup=with_home([]))
 @router.callback_query(F.data=='privacy')
 async def privacy(c:CallbackQuery):
     await safe_answer(c,)
-    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='🗑 Удалить мои данные',callback_data='eraseask')],[InlineKeyboardButton(text='↩️ Меню',callback_data='home')]])
-    await c.message.answer('🔐 Бот сохраняет только Telegram ID, итог теста и, если поставлена, оценку. Также сохраняется список избранных вузов. Имя, телефон, школа и ответы по отдельным вопросам в базе не сохраняются. Участие добровольное. Данные можно удалить.',reply_markup=kb)
+    kb=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='🗑 Удалить мои данные',callback_data='eraseask')],[InlineKeyboardButton(text='🏠 Главное меню',callback_data='home')]])
+    await c.message.answer('🔐 Бот сохраняет только Telegram ID, итог теста и, если поставлена, оценку. Также сохраняется список избранных вузов. Имя, телефон, школа и ответы по отдельным вопросам в базе не сохраняются. Во время теста ответы временно находятся в памяти сервера. Участие добровольное. Данные можно удалить.',reply_markup=kb)
 @router.callback_query(F.data=='eraseask')
 async def eraseask(c:CallbackQuery):
     await safe_answer(c,)
-    await c.message.answer('Точно удалить результат и оценку?',reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Да, удалить',callback_data='eraseyes'),InlineKeyboardButton(text='Отмена',callback_data='home')]]))
+    await c.message.answer('Точно удалить результат, оценку и избранное?',reply_markup=with_home([[InlineKeyboardButton(text='Да, удалить',callback_data='eraseyes'),InlineKeyboardButton(text='Отмена',callback_data='home')]]))
 @router.callback_query(F.data=='eraseyes')
 async def eraseyes(c:CallbackQuery,state:FSMContext):
-    storage.erase(c.from_user.id)
+    await asyncio.to_thread(storage.erase, c.from_user.id)
     await state.clear()
     await safe_answer(c,'Удалено')
     await c.message.edit_text('Твои результаты, оценка и избранное удалены из базы бота.',reply_markup=with_home([]))
@@ -372,19 +379,39 @@ async def home(c:CallbackQuery,state:FSMContext):
     await safe_answer(c,)
     await state.clear()
     await send_menu(c.message)
+@router.callback_query()
+async def stale_callback(c:CallbackQuery):
+    await safe_answer(c,'Кнопка устарела. Открой главное меню и начни заново.')
+    if c.message:
+        await c.message.answer('После перезапуска сервера незавершённый тест нужно начать заново.',reply_markup=with_home([]))
+
 @router.message(Command('myid'))
 async def myid(m:Message):
-    await m.answer(f'Твой Telegram ID: <code>{m.from_user.id}</code>\nПередавать его можно только координатору проекта для настройки доступа к обезличенной статистике.',parse_mode='HTML')
+    await m.answer(f'Твой Telegram ID: <code>{m.from_user.id}</code>\nПередавать его можно только координатору проекта для настройки доступа к обезличенной статистике.',parse_mode='HTML',reply_markup=with_home([]))
 
 @router.message(Command('stats'))
 async def stats(m:Message):
     if m.from_user.id not in ADMIN_IDS:
-        return await m.answer('Команда доступна только координатору проекта.')
-    total,counts,n,avg=storage.summary()
+        return await m.answer('Команда доступна только координатору проекта.',reply_markup=with_home([]))
+    total,counts,n,avg=await asyncio.to_thread(storage.summary)
     lines=['📊 <b>Обезличенная статистика</b>',f'Участников: {total}']
     lines.extend(f'{core.TRACKS[k]}: {counts.get(k,0)}' for k in core.KEYS)
     lines.append(f'Оценок: {n}; средний балл: {avg:.1f}' if avg is not None else 'Оценок пока нет')
     await m.answer('\n'.join(lines),parse_mode='HTML',reply_markup=with_home([]))
+@router.error()
+async def handle_error(event:ErrorEvent):
+    # Do not log exception text/tracebacks: database errors may contain a DSN.
+    logging.error('Update processing failed (%s)',type(event.exception).__name__)
+    update=event.update
+    message=update.callback_query.message if update.callback_query else update.message
+    if message:
+        try:
+            await message.answer('Не удалось выполнить действие. Попробуй ещё раз или открой главное меню.',reply_markup=with_home([]))
+        except Exception:
+            logging.error('Could not send recovery message')
+    return True
+
+
 @router.message()
 async def other(m:Message):
     await m.answer('Выбери раздел или вернись в главное меню.',reply_markup=with_home([]))
@@ -399,21 +426,39 @@ async def configure_webhook(bot: Bot):
 async def healthcheck(request):
     return web.Response(text='IT Navigator KZ online',content_type='text/plain')
 
-def main():
-    if not TOKEN or ':' not in TOKEN:
-        raise SystemExit('Укажи BOT_TOKEN в переменных окружения.')
-    logging.basicConfig(level=logging.INFO)
-    with storage.database(): pass
-    bot=Bot(token=TOKEN)
-    dp=Dispatcher()
-    dp.include_router(router)
-    dp.startup.register(configure_webhook)
+async def readiness(request):
+    try:
+        await asyncio.to_thread(storage.check_connection)
+    except Exception:
+        # Driver exceptions can contain connection credentials. Never return them.
+        return web.json_response({'status':'unavailable'}, status=503)
+    return web.json_response({'status':'ready'})
+
+
+def create_application(bot, dp):
     app=web.Application()
     secret=hashlib.sha256(TOKEN.encode('utf-8')).hexdigest()
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=secret).register(app, path=WEBHOOK_PATH)
     app.router.add_get('/',healthcheck)
     app.router.add_get('/health',healthcheck)
+    app.router.add_get('/ready',readiness)
     setup_application(app,dp,bot=bot)
+    return app
+
+
+def main():
+    if not TOKEN or ':' not in TOKEN:
+        raise SystemExit('Укажи BOT_TOKEN в переменных окружения.')
+    logging.basicConfig(level=logging.INFO)
+    try:
+        with storage.database(): pass
+    except Exception:
+        raise SystemExit('База данных недоступна. Проверь подключение в настройках хостинга.') from None
+    bot=Bot(token=TOKEN)
+    dp=Dispatcher(events_isolation=SimpleEventIsolation())
+    dp.include_router(router)
+    dp.startup.register(configure_webhook)
+    app=create_application(bot,dp)
     web.run_app(app,host='0.0.0.0',port=int(os.environ.get('PORT','10000')))
 
 if __name__=='__main__':
