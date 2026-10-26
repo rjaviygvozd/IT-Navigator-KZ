@@ -58,6 +58,13 @@ async def send_menu(message):
 async def start(message:Message,state:FSMContext):
     await state.clear()
     await send_menu(message)
+ANSWER_LABELS=('А','Б','В','Г')
+
+
+def format_options(options):
+    return '\n\n'+'\n\n'.join(f'<b>{ANSWER_LABELS[i]})</b> {escape(option)}' for i,option in enumerate(options))+'\n\nВыбери букву ответа:'
+
+
 async def question(message,state):
     data=await state.get_data()
     index=data['index']
@@ -69,8 +76,9 @@ async def question(message,state):
         await message.answer('✅ <b>Результат теста</b>\n'+core.result_explanation(scores)+'\n\n'+core.extended_roadmap(track)+'\n\nБаллы: '+', '.join(f'{core.TRACKS[k]} — {scores[k]}' for k in core.KEYS),parse_mode='HTML',reply_markup=menu())
         return
     title,options=core.QUESTIONS[index]
-    kb=with_home([[InlineKeyboardButton(text=opt,callback_data=f'a:{index}:{key}')] for key,opt in zip(core.KEYS,options)])
-    sent=await message.answer(f'<b>Вопрос {index+1}/{len(core.QUESTIONS)}</b>\n\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    kb=with_home([[InlineKeyboardButton(text=label,callback_data=f'a:{index}:{key}')] for key,label in zip(core.KEYS,ANSWER_LABELS)])
+    text=f'<b>Вопрос {index+1}/{len(core.QUESTIONS)}</b>\n\n{escape(title)}'+format_options(options)
+    sent=await message.answer(text,parse_mode='HTML',reply_markup=kb)
     await state.update_data(question_message_id=sent.message_id)
 @router.callback_query(F.data=='startquiz')
 async def startquiz(c:CallbackQuery,state:FSMContext):
@@ -98,7 +106,7 @@ async def about_project(c:CallbackQuery):
     await safe_answer(c,)
     await c.message.answer(
         'ℹ️ <b>О проекте IT Navigator KZ</b>\n\n'
-        'Учебный Telegram-бот для знакомства школьников 9–11 классов с IT-направлениями Казахстана.\n\n'
+        'Учебный Telegram-бот для знакомства школьников 10–11 классов с IT-направлениями Казахстана.\n\n'
         '🎯 7 ситуационных вопросов и 4 направления интересов.\n'
         '🗺 Персональная дорожная карта на 1–3 месяца, 6–12 месяцев и 1–3 года.\n'
         '🎓 Вузы, компании, гранты, сообщества и события.\n'
@@ -120,7 +128,29 @@ async def project_command(m:Message):
 async def my_roadmap(c:CallbackQuery):
     await safe_answer(c,)
     saved=await asyncio.to_thread(storage.latest_result, c.from_user.id)
-    await c.message.answer(core.extended_roadmap(saved[0]) if saved else 'Сначала пройди профориентационный тест.',parse_mode='HTML',reply_markup=menu())
+    if saved:
+        await c.message.answer(core.extended_roadmap(saved[0]),parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='🧭 Другое направление',callback_data='roadmapchoose')]]))
+    else:
+        await choose_roadmap(c.message)
+
+
+async def choose_roadmap(message):
+    await message.answer('🗺 Дорожную карту можно изучить без теста. Выбери направление сам или пройди тест, чтобы получить ориентир по интересам. Выбор здесь не меняет сохранённый результат.',reply_markup=with_home([[InlineKeyboardButton(text=core.TRACKS[k],callback_data=f'roadmaptrack:{k}')] for k in core.KEYS]+[[InlineKeyboardButton(text='🎯 Пройти тест',callback_data='startquiz')]]))
+
+
+@router.callback_query(F.data=='roadmapchoose')
+async def roadmap_choose(c:CallbackQuery):
+    await safe_answer(c)
+    await choose_roadmap(c.message)
+
+
+@router.callback_query(F.data.startswith('roadmaptrack:'))
+async def roadmap_track(c:CallbackQuery):
+    await safe_answer(c)
+    key=c.data.split(':',1)[1]
+    if key not in core.KEYS: return
+    await c.message.answer('Это общая карта по выбранному тобой направлению.\n\n'+core.extended_roadmap(key),parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='🧭 Другое направление',callback_data='roadmapchoose')],[InlineKeyboardButton(text='🎯 Пройти тест',callback_data='startquiz')]]))
+
 @router.callback_query(F.data=='professions')
 async def profession_categories(c:CallbackQuery):
     await safe_answer(c,)
@@ -159,7 +189,7 @@ async def eco_category(c:CallbackQuery):
             [InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem'),InlineKeyboardButton(text='🏠 Главное меню',callback_data='home')]])
         await c.message.answer('Выбери город:',reply_markup=kb)
     elif key=='companies':
-        kb=with_home([[InlineKeyboardButton(text='🧭 По IT-направлению',callback_data='companytracks')],[InlineKeyboardButton(text='💻 По технологиям',callback_data='companytechnologies')],[InlineKeyboardButton(text='🎓 Стажировки и карьера',callback_data='companycareers')],[InlineKeyboardButton(text='📋 Все компании',callback_data='ecopage:companies:Все:0')],[InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')]])
+        kb=with_home([[InlineKeyboardButton(text='🧭 По IT-направлению',callback_data='companytracks')],[InlineKeyboardButton(text='💻 Технологии и навыки',callback_data='companytechnologies')],[InlineKeyboardButton(text='🎓 Стажировки и карьера',callback_data='companycareers')],[InlineKeyboardButton(text='📋 Все компании',callback_data='ecopage:companies:Все:0')],[InlineKeyboardButton(text='📚 Разделы',callback_data='ecosystem')]])
         await c.message.answer('🏢 Выбери способ поиска компаний:',reply_markup=kb)
     else:
         await show_ecosystem(c.message,key,'Все',0)
@@ -194,7 +224,7 @@ async def company_tracks(c:CallbackQuery):
 @router.callback_query(F.data=='companytechnologies')
 async def company_technologies(c:CallbackQuery):
     await safe_answer(c,)
-    await c.message.answer('Технологии — ориентиры для поиска, а не подтверждение текущего стека компании.',reply_markup=with_home([[InlineKeyboardButton(text=t,callback_data=f'companytech:{i}')] for i,t in enumerate(ecosystem.TECHNOLOGIES)]))
+    await c.message.answer('💻 Здесь можно узнать, для чего нужны Python, Java, дизайн и аналитика, и открыть учебный источник. Эти карточки не фильтруют работодателей и не подтверждают технологии конкретных компаний. Текущие требования ищи в вакансии на сайте работодателя.',reply_markup=with_home([[InlineKeyboardButton(text=t,callback_data=f'companytech:{i}')] for i,t in enumerate(ecosystem.TECHNOLOGIES)]))
 
 async def send_company_matches(message,rows):
     lines=['🏢 <b>Компании для изучения</b>']
@@ -216,7 +246,10 @@ async def company_technology(c:CallbackQuery):
     except ValueError: return
     technologies=list(ecosystem.TECHNOLOGIES)
     if 0<=i<len(technologies):
-        await send_company_matches(c.message,ecosystem.companies_for_technology(technologies[i]))
+        technology=technologies[i]
+        description,task,url=ecosystem.TECHNOLOGIES[technology]
+        text=f'💻 <b>{escape(technology)}</b>\n\n{escape(description)}\n\n<b>Попробуй:</b> {escape(task)}\n\n<a href="{url}">Официальный учебный источник</a>\n\nРаботодатель указывает нужные технологии в конкретной вакансии. По этой карточке нельзя сделать вывод о стеке компании.'
+        await c.message.answer(text,parse_mode='HTML',reply_markup=with_home([[InlineKeyboardButton(text='💻 Другой навык',callback_data='companytechnologies')],[InlineKeyboardButton(text='🏢 Компании',callback_data='ecocat:companies'),InlineKeyboardButton(text='🎓 Стажировки',callback_data='companycareers')]]))
 
 @router.callback_query(F.data=='companycareers')
 async def company_careers(c:CallbackQuery):
@@ -319,8 +352,8 @@ async def interview_start(c:CallbackQuery,state:FSMContext):
 
 async def ask_interview(message,state,key,index):
     title,options,correct=interview_quizzes.QUIZZES[key][index]
-    kb=with_home([[InlineKeyboardButton(text=f'{chr(1040+i)}) {option}',callback_data=f'intanswer:{index}:{i}')] for i,option in enumerate(options)])
-    sent=await message.answer(f'🎤 <b>Вопрос {index+1}/5</b>\n{escape(title)}',parse_mode='HTML',reply_markup=kb)
+    kb=with_home([[InlineKeyboardButton(text=ANSWER_LABELS[i],callback_data=f'intanswer:{index}:{i}')] for i,option in enumerate(options)])
+    sent=await message.answer(f'🎤 <b>Вопрос {index+1}/5</b>\n{escape(title)}'+format_options(options),parse_mode='HTML',reply_markup=kb)
     await state.update_data(question_message_id=sent.message_id)
 
 @router.callback_query(Interview.answering,F.data.startswith('intanswer:'))
