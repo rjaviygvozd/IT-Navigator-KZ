@@ -7,7 +7,8 @@ CATALOG={
  ('МУИТ (IITU)','Алматы','https://iitu.edu.kz','IT-направления и условия поступления.'),
  ('Satbayev University','Алматы','https://satbayev.university','Инженерные и технические программы.'),
  ('КИМЭП','Алматы','https://kimep.kz','Бизнес и менеджмент, уточните наличие нужной IT-программы.'),
- ('КазНУ имени аль-Фараби','Алматы','https://farabi.university','Программы и условия поступления на сайте.')
+ ('КазНУ имени аль-Фараби','Алматы','https://farabi.university','Программы и условия поступления на сайте.'),
+ ('Торайгыров университет','Павлодар','https://tou.edu.kz','На сайте есть факультет Computer Science. Условия поступления уточняйте в приёмной комиссии. Источник просмотрен 26.10.2026.')
  ],
  'companies':[
  ('Kaspi.kz','Финтех, цифровые сервисы','https://job.kaspi.kz/','Вакансии и условия стажировок проверяйте в карьерном разделе.'),
@@ -67,7 +68,7 @@ TECHNOLOGIES={
 }
 # Technologies are broad search hints; they are not audited stack inventories.
 CAREER_RESOURCES=[
- ('Kolesa Academy','https://kolesa.group/education/academy','Оплачиваемая очная стажировка в Алматы. Условия отбора и набор уточняйте на сайте.'),
+ ('Kolesa Academy','https://kolesa.group/education/academy','Страница программы обучения. Текущий набор, оплату, формат и возрастные условия нужно проверить на сайте.'),
  ('Kolesa Group — вакансии','https://kolesa.group/career/job','Направления разработки, аналитики, дизайна и продуктов. Открытые позиции могут изменяться.')
 ]
 def companies_for_track(track):
